@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import StatusPill from "@/components/StatusPill";
 import { useToast } from "@/components/Toast";
+import { useConfirm } from "@/components/Confirm";
 import { api, ApiError, fileUrl } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 
@@ -9,9 +10,10 @@ const STATUS_FILTERS = ["pending", "verified", "rejected", "all"];
 
 export default function KycPage() {
   const toast = useToast();
+  const confirm = useConfirm();
   const { t } = useI18n();
   const [items, setItems] = useState([]);
-  const [status, setStatus] = useState("pending");
+  const [status, setStatus] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [busyId, setBusyId] = useState(null);
@@ -32,6 +34,11 @@ export default function KycPage() {
   }, [status]);
 
   async function review(id, action) {
+    const ok = await confirm({
+      message: action === "reject" ? t("kyc.confirmReject") : t("kyc.confirmApprove"),
+      danger: action === "reject",
+    });
+    if (!ok) return;
     setBusyId(id);
     try {
       const updated = await api.post(`/kyc/${id}/${action}`);

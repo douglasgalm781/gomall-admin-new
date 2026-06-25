@@ -362,8 +362,8 @@ export default function FinancePage() {
   const [loading,      setLoading]      = useState(true);
   const [busyId,       setBusyId]       = useState(null);
 
-  function load() {
-    setLoading(true);
+  function load({ silent = false } = {}) {
+    if (!silent) setLoading(true);
     const rParams = new URLSearchParams({ status: status === "all" ? "all" : status });
     const wParams = new URLSearchParams({ status: status === "all" ? "all" : status });
     if (q.trim()) { rParams.set("q", q.trim()); wParams.set("q", q.trim()); }
@@ -371,7 +371,7 @@ export default function FinancePage() {
     Promise.all([
       type !== "withdrawal" ? api.get(`/recharge?${rParams}`)   .then((d) => setRecharges(d.items   || [])) : Promise.resolve(),
       type !== "recharge"   ? api.get(`/withdraw?${wParams}`)   .then((d) => setWithdrawals(d.items || [])) : Promise.resolve(),
-    ]).catch(() => {}).finally(() => setLoading(false));
+    ]).catch(() => {}).finally(() => { if (!silent) setLoading(false); });
 
     if (type === "withdrawal") setRecharges([]);
     if (type === "recharge")   setWithdrawals([]);
@@ -379,10 +379,25 @@ export default function FinancePage() {
 
   useEffect(() => { load(); }, [type, status]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Keep the list in sync with newly submitted recharges/withdrawals while the
+  // page is open: silent poll every 20s + refetch when the window regains focus.
+  // (The sidebar badge polls independently, so without this the list could lag
+  // behind the badge until a manual reload.)
+  useEffect(() => {
+    const id = setInterval(() => { if (!busyId) load({ silent: true }); }, 20000);
+    const onFocus = () => { if (!busyId) load({ silent: true }); };
+    window.addEventListener("focus", onFocus);
+    return () => { clearInterval(id); window.removeEventListener("focus", onFocus); };
+  }, [type, status, q, busyId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   function onSearch(e) { e.preventDefault(); load(); }
 
   async function reviewRecharge(id, action) {
-    if (action === "reject" && !(await confirm({ message: t("finance.confirmRejectRecharge"), danger: true }))) return;
+    const ok = await confirm({
+      message: action === "reject" ? t("finance.confirmRejectRecharge") : t("finance.confirmApproveRecharge"),
+      danger: action === "reject",
+    });
+    if (!ok) return;
     setBusyId(id);
     try {
       const updated = await api.post(`/recharge/${id}/${action}`);
@@ -396,7 +411,11 @@ export default function FinancePage() {
   }
 
   async function reviewWithdrawal(id, action) {
-    if (action === "reject" && !(await confirm({ message: t("finance.confirmRejectWithdrawal"), danger: true }))) return;
+    const ok = await confirm({
+      message: action === "reject" ? t("finance.confirmRejectWithdrawal") : t("finance.confirmApproveWithdrawal"),
+      danger: action === "reject",
+    });
+    if (!ok) return;
     setBusyId(id);
     try {
       const updated = await api.post(`/withdraw/${id}/${action}`);

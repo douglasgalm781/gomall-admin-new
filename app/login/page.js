@@ -5,12 +5,12 @@ import Icon from "@/components/Icon";
 import { useToast } from "@/components/Toast";
 import { login } from "@/lib/store";
 import { ApiError } from "@/lib/api";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, LANGUAGES } from "@/lib/i18n";
 
 export default function AdminLoginPage() {
   const router = useRouter();
   const toast = useToast();
-  const { t } = useI18n();
+  const { t, lang, setLang } = useI18n();
   const [account, setAccount] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -38,9 +38,27 @@ export default function AdminLoginPage() {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center px-4"
+      className="relative min-h-screen flex items-center justify-center px-4"
       style={{ background: "linear-gradient(160deg, #1c1813 0%, #2c2519 55%, #15110a 100%)" }}
     >
+      {/* Language switcher */}
+      <div className="absolute top-5 right-5 flex items-center rounded-full border border-white/15 bg-white/5 p-0.5 backdrop-blur">
+        {LANGUAGES.map((l) => (
+          <button
+            key={l.code}
+            type="button"
+            onClick={() => setLang(l.code)}
+            className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
+              lang === l.code
+                ? "bg-gradient-to-br from-gold-300 to-gold-600 text-ink-900"
+                : "text-white/55 hover:text-white/90"
+            }`}
+          >
+            {l.label}
+          </button>
+        ))}
+      </div>
+
       <div className="w-full max-w-[400px]">
         <div className="flex flex-col items-center mb-8 text-center">
           <span className="w-14 h-14 rounded-2xl flex items-center justify-center bg-gradient-to-br from-gold-300 to-gold-600 text-ink-900 mb-4 shadow-card">

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Icon from "@/components/Icon";
-import ImageCropUploader from "@/components/ImageCropUploader";
+import ImageCropUploader, { Cropper } from "@/components/ImageCropUploader";
 import Modal from "@/components/Modal";
 import { useToast } from "@/components/Toast";
 import { api, ApiError, fileUrl } from "@/lib/api";
@@ -9,7 +9,7 @@ import { useI18n } from "@/lib/i18n";
 import { refreshBadges } from "@/lib/useBadges";
 import { useConfirm } from "@/components/Confirm";
 
-const CURRENCIES = ["CNY", "USD", "VND", "MYR", "THB", "SGD"];
+const CURRENCIES = ["CNY", "USD", "VND", "MYR", "THB", "SGD", "USDT-TRC20", "USDT-ERC20"];
 
 const EMPTY_FORM = {
   brand: "",
@@ -111,6 +111,7 @@ export default function ProductsPage() {
   const [imagePreview, setImagePreview] = useState(null);
   const [keepSubs,     setKeepSubs]     = useState([]);
   const [newSubs,      setNewSubs]      = useState([]);
+  const [subCropFile,  setSubCropFile]  = useState(null);
 
   // Category management
   const [categories,      setCategories]      = useState([]);
@@ -134,8 +135,8 @@ export default function ProductsPage() {
     api.get("/shops?status=active").then((d) => setMerchantShops(d.items || [])).catch(() => {});
   }, []);
 
-  function load() {
-    setLoading(true);
+  function load({ silent = false } = {}) {
+    if (!silent) setLoading(true);
     setError(null);
     const params = new URLSearchParams({ page: String(page), pageSize: tab === "pending" ? "100" : String(pageSize) });
     if (tab === "pending") {
@@ -155,7 +156,7 @@ export default function ProductsPage() {
         setTotal(data.total || 0);
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : t("products.failed")))
-      .finally(() => setLoading(false));
+      .finally(() => { if (!silent) setLoading(false); });
   }
 
   useEffect(() => {
@@ -163,12 +164,23 @@ export default function ProductsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, category, status, merchantShopId, sort, tab]);
 
+  // The product list isn't pushed over the websocket (only badge counts are),
+  // so silently refetch when the admin returns to the tab to pick up new
+  // merchant submissions / changes without a manual reload.
+  useEffect(() => {
+    const onFocus = () => load({ silent: true });
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, category, status, merchantShopId, sort, tab, q]);
+
   function cycleSort(base) {
     setSort((s) => (s === `${base}Desc` ? `${base}Asc` : s === `${base}Asc` ? "newest" : `${base}Desc`));
     setPage(1);
   }
 
   async function approveProduct(p) {
+    if (!(await confirm({ message: t("products.confirmApprove") }))) return;
     try {
       const updated = await api.post(`/products/${p.id}/approve`);
       setItems((prev) => prev.filter((x) => x.id !== updated.id));
@@ -291,15 +303,17 @@ export default function ProductsPage() {
     setModalOpen(true);
   }
 
+  // Pick a single sub-image, then send it through the same crop/fit dialog.
   function handleSubFile(e) {
-    const files = Array.from(e.target.files || []);
-    if (!files.length) return;
+    const file = e.target.files?.[0];
+    if (!file) return;
     e.target.value = "";
-    const remaining = 6 - keepSubs.length - newSubs.length;
-    files.slice(0, remaining).forEach((file) => {
-      const preview = URL.createObjectURL(file);
-      setNewSubs((prev) => [...prev, { blob: file, preview }]);
-    });
+    setSubCropFile(file);
+  }
+
+  function addCroppedSub(blob, preview) {
+    setSubCropFile(null);
+    setNewSubs((prev) => [...prev, { blob, preview }]);
   }
 
   async function save() {
@@ -448,6 +462,9 @@ export default function ProductsPage() {
           <p className="text-sm text-muted mt-1">{t("products.subtitle")}</p>
         </div>
         <div className="flex gap-2 self-start">
+          <button onClick={() => load()} disabled={loading} className="btn-ghost px-4 py-2.5 text-sm flex items-center gap-2 border border-ink-200 disabled:opacity-60">
+            <Icon name="refresh" size={15} className={loading ? "animate-spin" : ""} /> {t("common.refresh")}
+          </button>
           <button onClick={() => { setNewCatName(""); setCatModal(true); }} className="btn-ghost px-4 py-2.5 text-sm flex items-center gap-2 border border-ink-200">
             <Icon name="settings" size={15} /> {t("products.categoriesBtn")}
           </button>
@@ -874,7 +891,7 @@ export default function ProductsPage() {
             ))}
             {(keepSubs.length + newSubs.length) < 6 && (
               <div className="w-[80px] aspect-[4/5]">
-                <input ref={subRef} type="file" accept="image/*" multiple onChange={handleSubFile} className="hidden" />
+                <input ref={subRef} type="file" accept="image/*" onChange={handleSubFile} className="hidden" />
                 <button
                   type="button"
                   onClick={() => subRef.current?.click()}
@@ -914,7 +931,7 @@ export default function ProductsPage() {
             <select value={form.currency} onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))} className="field mt-1">
               {CURRENCIES.map((c) => (
                 <option key={c} value={c}>
-                  {c}
+                  {c.replace("USDT-", "USDT/")}
                 </option>
               ))}
             </select>
@@ -1049,6 +1066,17 @@ export default function ProductsPage() {
             )}
           </div>
         </div>
+
+        {/* Sub-image crop/fit dialog */}
+        {subCropFile && (
+          <Cropper
+            file={subCropFile}
+            aspect={4 / 5}
+            maxWidth={1000}
+            onCropped={addCroppedSub}
+            onCancel={() => setSubCropFile(null)}
+          />
+        )}
       </Modal>
 
       {/* Reject product confirmation */}

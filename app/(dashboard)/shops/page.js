@@ -190,7 +190,7 @@ export default function ShopsPage() {
   }
 
   async function transition(id, action, label, body) {
-    if (action === "reject" && !(await confirm({ message: t("stores.confirmAction", { action }), danger: true }))) {
+    if (!(await confirm({ message: t("stores.confirmAction", { action }), danger: action === "reject" }))) {
       return;
     }
     setBusyId(id);

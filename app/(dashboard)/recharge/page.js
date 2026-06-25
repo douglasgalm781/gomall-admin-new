@@ -60,7 +60,7 @@ export default function RechargePage() {
   }
 
   async function review(id, action) {
-    if (action === "reject" && !(await confirm({ message: t("recharge.confirmReject"), danger: true }))) return;
+    if (!(await confirm({ message: action === "reject" ? t("recharge.confirmReject") : t("recharge.confirmApprove"), danger: action === "reject" }))) return;
     setBusyId(id);
     try {
       const updated = await api.post(`/recharge/${id}/${action}`);

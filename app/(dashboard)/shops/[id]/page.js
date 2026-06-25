@@ -103,6 +103,10 @@ export default function StoreDetailPage() {
   }
 
   async function transition(action, body) {
+    // "suspend" is confirmed via its own modal (handleSuspend); confirm the rest here.
+    if (action !== "suspend") {
+      if (!(await confirm({ message: t("stores.confirmAction", { action }), danger: action === "reject" }))) return;
+    }
     setBusyId("status");
     try {
       const updated = await api.post(`/shops/${id}/${action}`, body);

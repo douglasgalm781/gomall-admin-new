@@ -47,7 +47,7 @@ export default function WithdrawalsPage() {
   }
 
   async function review(id, action) {
-    if (action === "reject" && !(await confirm({ message: t("withdrawals.confirmReject"), danger: true }))) return;
+    if (!(await confirm({ message: action === "reject" ? t("withdrawals.confirmReject") : t("withdrawals.confirmApprove"), danger: action === "reject" }))) return;
     setBusyId(id);
     try {
       const updated = await api.post(`/withdraw/${id}/${action}`);
